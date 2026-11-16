@@ -4,7 +4,7 @@
 
 **Status:** Prototype v1 · Portfolio project · All data is simulated (no real backend, APIs or accounts)
 
-**Live demo:** `https://<your-username>.github.io/<repo-name>/`
+**Live demo:** https://aishramku.github.io/agent-access-manager/
 
 ---
 
