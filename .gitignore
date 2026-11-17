@@ -1,0 +1,5 @@
+# Local database and Python caches
+backend/*.db
+__pycache__/
+.pytest_cache/
+.venv/

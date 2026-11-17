@@ -51,6 +51,14 @@
   .brand .sub { font-size: 12px; color: var(--muted); }
   .proto-pill { font-size: 11px; font-weight: 600; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); padding: 2px 8px; border-radius: 999px; margin-left: 4px; }
   .header-right { display: flex; align-items: center; gap: 14px; }
+  .mode-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--neutral-bg); color: var(--neutral); cursor: default; white-space: nowrap; }
+  .mode-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .mode-pill.server { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-border); }
+  .mode-pill.available { color: var(--info); background: var(--info-bg); border-color: var(--info-border); cursor: pointer; }
+  .mode-pill.connecting::before { animation: pulse 0.9s ease-in-out infinite alternate; }
+  @keyframes pulse { to { opacity: .2; } }
+  @media (prefers-reduced-motion: reduce) { .mode-pill.connecting::before { animation: none; } }
+  .composer.busy button { opacity: .6; pointer-events: none; }
   .user-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
   .avatar { width: 28px; height: 28px; border-radius: 50%; background: #dbe4ff; color: var(--primary); font-weight: 700; font-size: 12px; display: grid; place-items: center; }
   .user-chip b { color: var(--text); font-weight: 600; }
@@ -313,13 +321,14 @@
   <div class="brand">
     <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
     <div>
-      <h1>Agent Access Manager <span class="proto-pill">Prototype v1</span></h1>
+      <h1>Agent Access Manager <span class="proto-pill">Prototype v2</span></h1>
       <div class="sub">Authorization layer between AI agents and company systems · all data simulated</div>
     </div>
   </div>
   <div class="header-right">
+    <button class="mode-pill" id="modePill" type="button" disabled title="Browser demo: decisions run in this page">Browser demo</button>
     <div class="user-chip"><div class="avatar">AR</div><span>Signed in as <b>Alex Rivera</b> <span class="role">· Employee</span></span></div>
-    <button class="btn" id="resetBtn" title="Reload with fresh tokens, policy and calendar">Reset demo</button>
+    <button class="btn" id="resetBtn" title="Start over with fresh tokens, policy and calendar">Reset demo</button>
   </div>
 </header>
 
@@ -423,8 +432,8 @@
     </div>
 
     <div class="roadmap">
-      <span class="tag">Roadmap · v2</span>
-      <p><b>v1 runs entirely in the browser with simulated data.</b> v2 will add a Python backend (Flask or FastAPI), a database for policies and audit logs, real signed JWT tokens, and server-side permission checks. The <code>checkAccess()</code> function is already isolated so it can move to the backend unchanged.</p>
+      <span class="tag">v2 · Backend</span>
+      <p><b>With the Python backend connected</b> (see the badge in the header), every decision runs on a FastAPI server: each agent carries a real signed JWT, revocation happens server-side, and the audit log and approval queue are stored in a database. Without a backend, the same rules run in your browser as a demo. <b>Next:</b> replace keyword routing with an AI agent that uses Claude tool calls, with every tool call checked by this gateway.</p>
     </div>
     <div class="footer">Agent Access Manager · Prototype v1 · Portfolio project. All users, agents, tokens and systems are fictional.</div>
   </div>
@@ -433,6 +442,15 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
+/* =====================================================================
+   0. BACKEND CONNECTION
+   Set this to your deployed API (for example "https://your-api.onrender.com")
+   to run every decision on the server. Leave it empty and the page uses the
+   backend it was served from, if any, or else runs entirely in the browser.
+   You can also add ?api=<url> to the page address to try a backend.
+   ===================================================================== */
+const BACKEND_URL = "";
+
 /* =====================================================================
    1. POLICY
    All agent permissions, approved software and folder rules live here.
@@ -1143,7 +1161,7 @@ function tick() {
   for (const [id, tok] of Object.entries(state.tokens)) {
     const st = tokenStatus(tok, now);
     if (st !== state.knownTokenStatus[id]) {
-      if (st === "expired") logAudit({ agentId: id, action: "token_expired", text: "System", result: "SYSTEM", reason: `Token ${maskToken(tok.value)} reached its 1-hour lifetime` });
+      if (st === "expired" && !API.on) logAudit({ agentId: id, action: "token_expired", text: "System", result: "SYSTEM", reason: `Token ${maskToken(tok.value)} reached its 1-hour lifetime` });
       changed = true;
     }
     const c = document.querySelector(`[data-countdown="${id}"]`);
@@ -1238,7 +1256,7 @@ function sentence(s) { return /[.!?]$/.test(s) ? s : s + "."; }
 function normalize(s) { return s.toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim(); }
 function hasWord(text, kw) { return new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(text); }
 function randHex(n) { const a = new Uint8Array(n / 2); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, "0")).join(""); }
-function maskToken(v) { return v ? `${v.slice(0, 8)}…${v.slice(-4)}` : "(no token)"; }
+function maskToken(v) { if (!v) return "(no token)"; return v.includes("…") ? v : `${v.slice(0, 8)}…${v.slice(-4)}`; }
 function fmtDuration(ms) { if (ms <= 0) return "00:00"; const s = Math.ceil(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 function fmtClock(d) { return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
 function fmtTime(min) { if (min == null) return "?"; const h = Math.floor(min / 60), m = min % 60; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; }
@@ -1258,13 +1276,188 @@ function parseTimes(t) {
 }
 
 /* =====================================================================
+   8b. BACKEND MODE
+   When a backend is reachable, the server makes every decision and stores
+   every record; this page only sends input and shows the results.
+   ===================================================================== */
+const API = { on: false, base: null, session: null, busy: false };
+const hasUserActivity = () => state.chat.some(m => m.role === "user");
+const sessionKey = () => "aam-session:" + (API.base || location.origin);
+
+function apiCandidates() {
+  const list = [];
+  let param = null;
+  try { param = new URLSearchParams(location.search).get("api"); } catch (e) { /* ignore */ }
+  const configured = param || BACKEND_URL;
+  if (configured) list.push({ base: configured.replace(/\/+$/, ""), timeout: 75000 }); // free hosts can take ~1 min to wake up
+  if (location.protocol === "http:" || location.protocol === "https:") list.push({ base: "", timeout: 4000 });
+  return list;
+}
+
+async function fetchJson(url, opts = {}, timeout = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const r = await fetch(url, { ...opts, signal: ctrl.signal });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(typeof body.detail === "string" ? body.detail : `request failed (HTTP ${r.status})`);
+      err.status = r.status;
+      throw err;
+    }
+    return body;
+  } finally { clearTimeout(timer); }
+}
+
+async function api(method, path, body) {
+  const call = () => fetchJson(API.base + path, {
+    method,
+    headers: { "Content-Type": "application/json", "X-Session-Id": API.session || "" },
+    body: body ? JSON.stringify(body) : undefined
+  }, 75000);
+  try { return await call(); }
+  catch (e) {
+    if (e.status === 404 && /session/i.test(e.message)) { await newSession(); toast("Your demo sandbox expired, so a fresh one was started."); return call(); }
+    throw e;
+  }
+}
+
+async function newSession() {
+  const r = await fetchJson(API.base + "/api/sessions", { method: "POST" }, 75000);
+  API.session = r.session_id;
+  try { localStorage.setItem(sessionKey(), r.session_id); } catch (e) { /* storage blocked: the sandbox lasts for this page only */ }
+  return r.state;
+}
+
+function setMode(mode) {
+  const pill = document.getElementById("modePill");
+  const modes = {
+    connecting: ["Connecting to backend…", "Waking up the backend. Free hosting can take up to a minute.", true],
+    server: ["Live backend", `Decisions run on the server at ${API.base || location.origin}`, true],
+    available: ["Backend online · switch", "Click to start a fresh session on the live backend", false],
+    local: ["Browser demo", "No backend connected: decisions run in this page", true]
+  };
+  const [label, title, disabled] = modes[mode];
+  pill.className = "mode-pill " + mode;
+  pill.textContent = label; pill.title = title; pill.disabled = disabled;
+}
+
+async function connectBackend() {
+  const candidates = apiCandidates();
+  if (!candidates.length) return setMode("local");
+  setMode("connecting");
+  for (const c of candidates) {
+    try {
+      const h = await fetchJson(c.base + "/api/health", {}, c.timeout);
+      if (h.status !== "ok") continue;
+      API.base = c.base;
+      if (hasUserActivity()) return setMode("available"); // don't wipe what the visitor is doing
+      return await enterServerMode();
+    } catch (e) { /* try the next candidate */ }
+  }
+  setMode("local");
+}
+
+async function enterServerMode() {
+  let s = null;
+  try { API.session = localStorage.getItem(sessionKey()); } catch (e) { API.session = null; }
+  if (API.session) {
+    try { s = await fetchJson(API.base + "/api/state", { headers: { "X-Session-Id": API.session } }); } catch (e) { s = null; }
+  }
+  if (!s) s = await newSession();
+  API.on = true;
+  state.chat = []; state.audit = []; state.queue = []; state.lastTrace = null; state.pendingVerification = null;
+  addChat({ role: "agent", agentId: null, html: `<p>Hi Alex. You're connected to the <b>live backend</b>. Every request is now checked on the server: the agent's signed token is verified, the policy is enforced there, and each decision is stored in a database.</p>` });
+  applyServerState(s);
+  renderTrace(); renderAll(); renderChat();
+  setMode("server");
+}
+
+function applyServerState(s) {
+  POLICY.policyVersion = s.policy_version;
+  for (const [id, a] of Object.entries(s.agents)) if (POLICY.agents[id]) POLICY.agents[id].permissions = { ...a.permissions };
+  for (const [id, t] of Object.entries(s.tokens)) {
+    state.tokens[id] = { value: t.preview, status: t.status === "revoked" ? "revoked" : "valid", issuedAt: t.issued_at * 1000, expiresAt: t.expires_at * 1000 };
+  }
+  state.queue = s.approvals.map(a => ({
+    id: a.id, createdAt: new Date(a.created_at * 1000), requester: a.requester, text: a.request_text,
+    req: { agentId: a.agent_id, action: a.action }, route: { summary: a.summary }, approver: a.approver, reason: a.reason
+  }));
+  const known = new Set(state.audit.map(e => e.id));
+  const first = state.audit.length === 0;
+  state.audit = s.audit.map(e => ({
+    id: e.id, ts: new Date(e.ts * 1000), agentId: e.agent_id, action: e.action, text: e.request_text,
+    result: e.result, reason: e.reason, requester: e.requester, fresh: !first && !known.has(e.id)
+  }));
+  const changed = new Set(s.calendar_changed || []);
+  state.calendar = s.calendar;
+  for (const day of ["today", "tomorrow"]) state.calendar[day].forEach(m => { m.flash = changed.has(m.id); });
+  state.pendingVerification = s.pending_verification ? { remote: true } : null;
+}
+
+function showServerResult(res, s) {
+  applyServerState(s);
+  res.notes.forEach(n => addChat({ role: "system", text: n }));
+  if (res.message !== null) {
+    let html = `<p>${esc(res.message)}</p>`;
+    if (res.items.length) html += `<ul>${res.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`;
+    if (res.hint) html += `<p style="margin-top:6px;font-size:12px;color:var(--subtle)">${esc(res.hint)}</p>`;
+    addChat({ role: "agent", agentId: res.agent_id, html, decision: res.decision, reason: res.decision === "ALLOWED" ? res.reason : undefined });
+  }
+  const r = res.route;
+  setTrace({
+    text: res.request_text,
+    route: r ? { agentId: r.agent_id, action: r.action, hits: r.hits, summary: r.summary } : null,
+    outcome: res.outcome, exec: res.exec_note ? { note: res.exec_note } : null,
+    mode: res.mode, queueItem: res.approval_id ? { id: res.approval_id } : null
+  });
+  renderAll(); renderChat();
+}
+
+async function withBusy(fn) {
+  API.busy = true;
+  document.getElementById("composer").classList.add("busy");
+  try { await fn(); }
+  catch (e) { toast(`Couldn't reach the backend: ${e.message}`); renderAll(); }
+  finally { API.busy = false; document.getElementById("composer").classList.remove("busy"); }
+}
+
+function serverSend(text) {
+  text = text.trim(); if (!text) return;
+  const isCode = !!state.pendingVerification && /^\d{4,8}$/.test(text);
+  addChat(isCode ? { role: "user", text: "•".repeat(text.length), note: "verification code" } : { role: "user", text });
+  return withBusy(async () => {
+    const r = isCode ? await api("POST", "/api/verify", { code: text }) : await api("POST", "/api/requests", { text });
+    showServerResult(r.result, r.state);
+    if (r.result.decision === "NEEDS_APPROVAL") toast(`${r.result.approval_id} added to the Approval Queue`);
+  });
+}
+
+function serverApproval(id, approve) {
+  return withBusy(async () => {
+    const r = await api("POST", `/api/approvals/${encodeURIComponent(id)}/${approve ? "approve" : "deny"}`);
+    showServerResult(r.result, r.state);
+    toast(!approve ? `${id} denied` : r.result.decision === "ALLOWED" ? `${id} approved and completed` : `${id} approved, but blocked: ${r.result.reason}`);
+  });
+}
+
+function serverAdmin(method, path, body) {
+  return withBusy(async () => {
+    const r = await api(method, path, body);
+    applyServerState(r.state); renderAll(); renderChat();
+    if (r.notice) toast(r.notice);
+  });
+}
+
+/* =====================================================================
    9. WIRE UP
    ===================================================================== */
 document.getElementById("composer").addEventListener("submit", e => {
   e.preventDefault();
   const input = document.getElementById("chatInput");
+  if (API.busy) return;
   const v = input.value; input.value = "";
-  handleUserMessage(v);
+  if (API.on) serverSend(v); else handleUserMessage(v);
   input.focus();
 });
 document.getElementById("samples").addEventListener("click", e => {
@@ -1275,24 +1468,34 @@ document.getElementById("samples").addEventListener("click", e => {
 document.querySelector(".tabs").addEventListener("click", e => { const t = e.target.closest(".tab"); if (t) showTab(t.dataset.tab); });
 document.querySelector(".admin .panel-body").addEventListener("click", e => {
   const d = e.target.closest("button"); if (!d) return;
-  if (d.dataset.revoke) revokeToken(d.dataset.revoke);
-  else if (d.dataset.rotate) rotateToken(d.dataset.rotate);
-  else if (d.dataset.expire) expireToken(d.dataset.expire);
-  else if (d.dataset.approve) decideApproval(d.dataset.approve, true);
-  else if (d.dataset.deny) decideApproval(d.dataset.deny, false);
+  const agent = id => `/api/agents/${encodeURIComponent(id)}/token/`;
+  if (API.busy && !d.dataset.filter && d.id !== "exportCsv") return;
+  if (d.dataset.revoke) API.on ? serverAdmin("POST", agent(d.dataset.revoke) + "revoke") : revokeToken(d.dataset.revoke);
+  else if (d.dataset.rotate) API.on ? serverAdmin("POST", agent(d.dataset.rotate) + "rotate") : rotateToken(d.dataset.rotate);
+  else if (d.dataset.expire) API.on ? serverAdmin("POST", agent(d.dataset.expire) + "expire") : expireToken(d.dataset.expire);
+  else if (d.dataset.approve) API.on ? serverApproval(d.dataset.approve, true) : decideApproval(d.dataset.approve, true);
+  else if (d.dataset.deny) API.on ? serverApproval(d.dataset.deny, false) : decideApproval(d.dataset.deny, false);
   else if (d.dataset.filter) { state.auditFilter = d.dataset.filter; renderAudit(); }
   else if (d.id === "exportCsv") exportCsv();
 });
 document.querySelector(".admin .panel-body").addEventListener("change", e => {
-  const i = e.target; if (i.dataset.perm) setPermission(i.dataset.agent, i.dataset.perm, i.checked);
+  const i = e.target; if (!i.dataset.perm) return;
+  if (!API.on) return setPermission(i.dataset.agent, i.dataset.perm, i.checked);
+  if (API.busy) { i.checked = !i.checked; return; }
+  serverAdmin("PUT", `/api/agents/${encodeURIComponent(i.dataset.agent)}/permissions/${encodeURIComponent(i.dataset.perm)}`, { enabled: i.checked });
 });
-document.getElementById("resetBtn").addEventListener("click", () => location.reload());
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (API.on) { try { localStorage.removeItem(sessionKey()); } catch (e) { /* ignore */ } }
+  location.reload();
+});
+document.getElementById("modePill").addEventListener("click", () => { if (API.base !== null && !API.on) enterServerMode().catch(e => toast(`Couldn't reach the backend: ${e.message}`)); });
 
 renderSamples();
 addChat({ role: "agent", agentId: null, html: `<p>Hi Alex. Type a request or pick one from <b>Try this</b>. I'll route it to the right agent, and the authentication layer will check that agent's identity, token and permissions before anything happens.</p>` });
 renderTrace();
 renderAll();
 setInterval(tick, 1000);
+connectBackend();
 </script>
 </body>
 </html>

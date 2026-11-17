@@ -1,0 +1,65 @@
+{
+  "policyVersion": "2026.11-v2",
+  "demoUser": { "id": "u-1042", "name": "Alex Rivera", "manager": "Jordan Lee", "device": "LAPTOP-AR-0142" },
+  "tokenPolicy": { "ttlSeconds": 3600, "algorithm": "HS256", "issuer": "agent-access-manager" },
+  "verification": { "method": "one_time_code", "channel": "SMS to phone ending 4821", "demoCode": "123456", "ttlSeconds": 300 },
+
+  "agents": {
+    "AGT-001": {
+      "name": "Calendar Agent", "owner": "IT Operations",
+      "routingKeywords": ["meeting", "calendar", "schedule", "appointment", "event"],
+      "permissions": { "read_calendar": true, "update_calendar": true, "delete_calendar": false }
+    },
+    "AGT-002": {
+      "name": "Password Reset Agent", "owner": "Service Desk",
+      "routingKeywords": ["password", "reset", "locked out", "unlock", "credential"],
+      "permissions": { "reset_own_password": true }
+    },
+    "AGT-003": {
+      "name": "Software Install Agent", "owner": "Endpoint Management",
+      "routingKeywords": ["install", "software", "download", "set up", "application"],
+      "permissions": { "install_software": true }
+    },
+    "AGT-004": {
+      "name": "File Access Agent", "owner": "Data Governance",
+      "routingKeywords": ["file", "folder", "share", "drive", "document", "access"],
+      "permissions": { "read_own_files": true, "request_folder_access": true }
+    }
+  },
+
+  "actions": {
+    "read_calendar":         { "agent": "AGT-001", "permission": "read_calendar",         "scope": "self" },
+    "update_calendar":       { "agent": "AGT-001", "permission": "update_calendar",       "scope": "self" },
+    "delete_calendar":       { "agent": "AGT-001", "permission": "delete_calendar",       "scope": "self" },
+    "reset_password":        { "agent": "AGT-002", "permission": "reset_own_password",    "scope": "self", "requiresVerification": true },
+    "install_software":      { "agent": "AGT-003", "permission": "install_software",      "resourceType": "software" },
+    "read_own_files":        { "agent": "AGT-004", "permission": "read_own_files",        "scope": "self", "resourceType": "folder" },
+    "request_folder_access": { "agent": "AGT-004", "permission": "request_folder_access", "resourceType": "folder" }
+  },
+
+  "software": {
+    "approved": ["Zoom", "Slack", "Chrome", "Microsoft Teams"],
+    "licensed": ["Adobe Photoshop", "Tableau"],
+    "licensedApprover": "IT Asset Management",
+    "aliases": { "photoshop": "Adobe Photoshop", "teams": "Microsoft Teams", "google chrome": "Chrome", "tableau desktop": "Tableau" },
+    "default": "deny"
+  },
+
+  "folders": {
+    "project_files": {
+      "label": "My Project Files", "path": "/Users/alex.rivera/Projects", "classification": "Personal",
+      "rule": "allow", "ownedByRequester": true, "keywords": ["project", "my files", "my documents"]
+    },
+    "marketing_shared": {
+      "label": "Marketing Shared Folder", "path": "\\\\contoso\\shares\\Marketing", "classification": "Internal",
+      "rule": "approval", "approver": "Manager (Jordan Lee)", "keywords": ["marketing"]
+    },
+    "hr_salary": {
+      "label": "HR Salary Folder", "path": "\\\\contoso\\shares\\HR\\Compensation", "classification": "Restricted",
+      "rule": "deny", "denyReason": "HR salary data is classified Restricted. Agents can't grant access to sensitive data.",
+      "keywords": ["salary", "salaries", "payroll", "compensation", "hr"]
+    }
+  },
+
+  "defaults": { "unknownFolder": "deny", "unroutedRequest": "deny" }
+}
